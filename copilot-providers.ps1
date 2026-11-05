@@ -13,7 +13,9 @@ if (-not (Get-Command -Name copilot-azure -CommandType Function -ErrorAction Sil
                 $apiKey = [Environment]::GetEnvironmentVariable("COPILOT_AZURE_API_KEY", "User")
             }
             if ([string]::IsNullOrWhiteSpace($apiKey)) {
-                throw "Missing environment variable COPILOT_AZURE_API_KEY (Machine/User)."
+                Write-Host "Missing required environment variable: COPILOT_AZURE_API_KEY" -ForegroundColor Yellow
+                Write-Host "Set COPILOT_AZURE_API_KEY, then re-run: copilot-azure" -ForegroundColor Yellow
+                return
             }
             $apiVersion = "2025-04-01-preview"
 
