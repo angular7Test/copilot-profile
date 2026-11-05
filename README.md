@@ -7,6 +7,7 @@ This repository provides a maintainable `copilot-custom` launcher for PowerShell
 - Full launcher logic lives in this repo (`copilot-function.ps1`).
 - `bootstrap.ps1` only loads commands at shell startup (no network check).
 - Updates are checked once per day via git pull when `copilot-custom` is invoked.
+- `copilot-providers.ps1` supplies fallback provider functions (including `copilot-azure`) on fresh machines.
 
 ## First-time setup (any computer)
 

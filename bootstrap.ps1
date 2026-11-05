@@ -1,6 +1,7 @@
 $script:CopilotCustomBootstrapLoaded = $true
 $script:CopilotCustomRepoPath = $PSScriptRoot
 $script:CopilotCustomStatePath = Join-Path $env:LOCALAPPDATA "copilot-custom\\state.json"
+$script:CopilotCustomProvidersPath = Join-Path $script:CopilotCustomRepoPath "copilot-providers.ps1"
 $script:CopilotCustomFunctionPath = Join-Path $script:CopilotCustomRepoPath "copilot-function.ps1"
 
 function Update-CopilotCustom {
@@ -77,6 +78,13 @@ function Update-CopilotCustom {
 
     Write-Host "copilot-custom is already up to date." -ForegroundColor DarkGray
     return $false
+}
+
+if (Test-Path $script:CopilotCustomProvidersPath) {
+    . $script:CopilotCustomProvidersPath
+}
+else {
+    Write-Host "Missing copilot-providers.ps1 in $script:CopilotCustomRepoPath" -ForegroundColor Yellow
 }
 
 if (Test-Path $script:CopilotCustomFunctionPath) {
