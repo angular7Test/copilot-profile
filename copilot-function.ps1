@@ -1,10 +1,16 @@
-function copilot {
+function copilot-custom {
     [CmdletBinding()]
     param(
         [switch]$SkipRemoteSync,
         [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]]$Args
+        [string[]]$RemainingArgs
     )
+
+    $hasRemainingArgs = $null -ne $RemainingArgs -and $RemainingArgs.Count -gt 0
+    if ($hasRemainingArgs -and $RemainingArgs.Count -eq 1 -and [string]::IsNullOrWhiteSpace($RemainingArgs[0])) {
+        $hasRemainingArgs = $false
+        $RemainingArgs = @()
+    }
 
     $realCopilot = Get-Command -Name copilot -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $realCopilot) {
@@ -13,11 +19,11 @@ function copilot {
 
     $caller = (Get-PSCallStack | Select-Object -Skip 1 -First 1).Command
     if ($caller -in @("copilot-azure", "copilot-deepseek", "copilot-nvidia", "copilot-default")) {
-        & $realCopilot.Source @Args
+        & $realCopilot.Source @RemainingArgs
         return
     }
 
-    if (-not $SkipRemoteSync -and $Args.Count -eq 0 -and -not $script:CopilotRemoteSyncInProgress) {
+    if (-not $SkipRemoteSync -and -not $hasRemainingArgs -and -not $script:CopilotRemoteSyncInProgress) {
         $repoOwner = "angular7Test"
         $repoName = "copilot-profile"
         $remoteScriptPath = "copilot-function.ps1"
@@ -31,17 +37,17 @@ function copilot {
                     $content = & $gh.Source api "repos/$repoOwner/$repoName/contents/$remoteScriptPath" --jq .content 2>$null
                     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($content)) {
                         $decodedContent = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content -replace '\s', '')))
-                        if ($decodedContent -match "(?m)^function\s+copilot\s*\{") {
+                        if ($decodedContent -match "(?m)^function\s+copilot-custom\s*\{") {
                             $downloadPath = Join-Path $env:TEMP "copilot-function.latest.ps1"
                             Set-Content -Path $downloadPath -Value $decodedContent -Encoding UTF8
                             . $downloadPath
 
-                            $resolvedCopilot = Get-Command -Name copilot -CommandType Function -ErrorAction SilentlyContinue
+                            $resolvedCopilot = Get-Command -Name copilot-custom -CommandType Function -ErrorAction SilentlyContinue
                             if ($resolvedCopilot -and $resolvedCopilot.Parameters.ContainsKey("SkipRemoteSync")) {
-                                & copilot -SkipRemoteSync @Args
+                                & copilot-custom -SkipRemoteSync @RemainingArgs
                             }
                             else {
-                                & copilot @Args
+                                & copilot-custom @RemainingArgs
                             }
                             return
                         }
@@ -57,13 +63,13 @@ function copilot {
         }
     }
 
-    if ($Args.Count -gt 0) {
-        & $realCopilot.Source @Args
+    if ($hasRemainingArgs) {
+        & $realCopilot.Source @RemainingArgs
         return
     }
 
     $providerFunctions = Get-Command -Name "copilot-*" -CommandType Function -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -ne "copilot" } |
+        Where-Object { $_.Name -ne "copilot-custom" } |
         Select-Object -ExpandProperty Name -Unique
 
     if (-not $providerFunctions) {
