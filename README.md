@@ -18,6 +18,8 @@ cd copilot-profile
 copilot-custom
 ```
 
+This works on clean machines too (no existing `copilot-azure` function required); providers are loaded from this repo.
+
 ## Manual update
 
 After profile load, run:

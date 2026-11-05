@@ -16,19 +16,28 @@ if (-not (Test-Path $bootstrapFile) -or -not (Test-Path $functionFile)) {
     throw "Installer must run from the copilot-profile repository root."
 }
 
+$repoRemote = & $git.Source -C $PSScriptRoot config --get remote.origin.url 2>$null
+if ([string]::IsNullOrWhiteSpace($repoRemote)) {
+    $repoRemote = "https://github.com/angular7Test/copilot-profile.git"
+}
+
 $repoParent = Split-Path -Path $RepoPath -Parent
 if (-not (Test-Path $repoParent)) {
     New-Item -Path $repoParent -ItemType Directory -Force | Out-Null
 }
 
 if (Test-Path (Join-Path $RepoPath ".git")) {
+    $currentOrigin = & $git.Source -C $RepoPath remote get-url origin 2>$null
+    if (-not [string]::IsNullOrWhiteSpace($repoRemote) -and $currentOrigin -ne $repoRemote) {
+        & $git.Source -C $RepoPath remote set-url origin $repoRemote 2>$null | Out-Null
+    }
     & $git.Source -C $RepoPath pull --ff-only --quiet 2>$null | Out-Null
 }
 elseif (Test-Path $RepoPath) {
     throw "Repo path exists but is not a git repository: $RepoPath"
 }
 else {
-    & $git.Source clone --quiet $PSScriptRoot $RepoPath
+    & $git.Source clone --quiet $repoRemote $RepoPath
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to clone repository into $RepoPath"
     }
@@ -80,5 +89,6 @@ if (-not $NoReload) {
 
 Write-Host "Installed copilot-custom bootstrap into: $ProfilePath" -ForegroundColor Green
 Write-Host "Local repo path: $RepoPath" -ForegroundColor DarkCyan
+Write-Host "Repo origin: $repoRemote" -ForegroundColor DarkCyan
 Write-Host "Backup created: $backupPath" -ForegroundColor DarkCyan
 Write-Host "Use 'copilot-custom' to launch." -ForegroundColor Cyan
