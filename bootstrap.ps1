@@ -79,13 +79,6 @@ function Update-CopilotCustom {
     return $false
 }
 
-try {
-    $null = Update-CopilotCustom
-}
-catch {
-    Write-Verbose "Update-CopilotCustom failed during bootstrap: $($_.Exception.Message)"
-}
-
 if (Test-Path $script:CopilotCustomFunctionPath) {
     . $script:CopilotCustomFunctionPath
 }

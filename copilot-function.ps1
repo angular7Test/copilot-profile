@@ -11,6 +11,31 @@ function copilot-custom {
         $RemainingArgs = @()
     }
 
+    if (-not $script:CopilotCustomAutoUpdateInProgress) {
+        $updateCommand = Get-Command -Name Update-CopilotCustom -CommandType Function -ErrorAction SilentlyContinue
+        if ($updateCommand) {
+            try {
+                $updated = Update-CopilotCustom
+            }
+            catch {
+                $updated = $false
+                Write-Verbose "Update-CopilotCustom failed before launch: $($_.Exception.Message)"
+            }
+
+            if ($updated -and (Test-Path $script:CopilotCustomFunctionPath)) {
+                $script:CopilotCustomAutoUpdateInProgress = $true
+                try {
+                    . $script:CopilotCustomFunctionPath
+                    & copilot-custom @RemainingArgs
+                    return
+                }
+                finally {
+                    $script:CopilotCustomAutoUpdateInProgress = $false
+                }
+            }
+        }
+    }
+
     $realCopilot = Get-Command -Name copilot -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $realCopilot) {
         throw "Could not find the copilot executable in PATH."
