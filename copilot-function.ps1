@@ -30,14 +30,17 @@ function copilot-custom {
         $gh = Get-Command -Name gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 
         if ($gh) {
+            Write-Host "Checking GitHub for latest copilot-custom function..." -ForegroundColor DarkCyan
             $script:CopilotRemoteSyncInProgress = $true
             try {
                 $null = & $gh.Source api "repos/$repoOwner/$repoName" --jq .private 2>$null
                 if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Repository reachable. Downloading latest function..." -ForegroundColor DarkCyan
                     $content = & $gh.Source api "repos/$repoOwner/$repoName/contents/$remoteScriptPath" --jq .content 2>$null
                     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($content)) {
                         $decodedContent = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content -replace '\s', '')))
                         if ($decodedContent -match "(?m)^function\s+copilot-custom\s*\{") {
+                            Write-Host "Latest function found. Applying updates..." -ForegroundColor Green
                             $downloadPath = Join-Path $env:TEMP "copilot-function.latest.ps1"
                             Set-Content -Path $downloadPath -Value $decodedContent -Encoding UTF8
                             . $downloadPath
@@ -51,15 +54,26 @@ function copilot-custom {
                             }
                             return
                         }
+                        Write-Host "Remote function format is invalid. Continuing with local copilot-custom." -ForegroundColor Yellow
                     }
+                    else {
+                        Write-Host "Remote function file not found. Continuing with local copilot-custom." -ForegroundColor Yellow
+                    }
+                }
+                else {
+                    Write-Host "Cannot access GitHub repository. Continuing with local copilot-custom." -ForegroundColor Yellow
                 }
             }
             catch {
+                Write-Host "GitHub sync failed. Continuing with local copilot-custom." -ForegroundColor Yellow
                 Write-Verbose "Remote copilot sync skipped: $($_.Exception.Message)"
             }
             finally {
                 $script:CopilotRemoteSyncInProgress = $false
             }
+        }
+        else {
+            Write-Host "GitHub CLI not found. Continuing with local copilot-custom." -ForegroundColor Yellow
         }
     }
 
