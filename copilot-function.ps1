@@ -27,6 +27,9 @@ function copilot-custom {
         $repoOwner = "angular7Test"
         $repoName = "copilot-profile"
         $remoteScriptPath = "copilot-function.ps1"
+        $syncDir = Join-Path $env:LOCALAPPDATA "copilot-custom"
+        $downloadPath = Join-Path $syncDir "copilot-function.latest.ps1"
+        $statePath = Join-Path $syncDir "sync-state.json"
         $gh = Get-Command -Name gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 
         if ($gh) {
@@ -35,16 +38,22 @@ function copilot-custom {
             try {
                 $null = & $gh.Source api "repos/$repoOwner/$repoName" --jq .private 2>$null
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Host "Repository reachable. Downloading latest function..." -ForegroundColor DarkCyan
-                    $content = & $gh.Source api "repos/$repoOwner/$repoName/contents/$remoteScriptPath" --jq .content 2>$null
-                    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($content)) {
-                        $decodedContent = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content -replace '\s', '')))
-                        if ($decodedContent -match "(?m)^function\s+copilot-custom\s*\{") {
-                            Write-Host "Latest function found. Applying updates..." -ForegroundColor Green
-                            $downloadPath = Join-Path $env:TEMP "copilot-function.latest.ps1"
-                            Set-Content -Path $downloadPath -Value $decodedContent -Encoding UTF8
-                            . $downloadPath
+                    $remoteSha = & $gh.Source api "repos/$repoOwner/$repoName/contents/$remoteScriptPath" --jq .sha 2>$null
+                    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteSha)) {
+                        $cachedSha = $null
+                        if (Test-Path $statePath) {
+                            try {
+                                $state = Get-Content -Path $statePath -Raw | ConvertFrom-Json -ErrorAction Stop
+                                $cachedSha = $state.remoteSha
+                            }
+                            catch {
+                                $cachedSha = $null
+                            }
+                        }
 
+                        if ($cachedSha -eq $remoteSha -and (Test-Path $downloadPath)) {
+                            Write-Host "Local cache is up to date. Skipping download." -ForegroundColor DarkGray
+                            . $downloadPath
                             $resolvedCopilot = Get-Command -Name copilot-custom -CommandType Function -ErrorAction SilentlyContinue
                             if ($resolvedCopilot -and $resolvedCopilot.Parameters.ContainsKey("SkipRemoteSync")) {
                                 & copilot-custom -SkipRemoteSync @RemainingArgs
@@ -54,10 +63,42 @@ function copilot-custom {
                             }
                             return
                         }
-                        Write-Host "Remote function format is invalid. Continuing with local copilot-custom." -ForegroundColor Yellow
+
+                        Write-Host "New version detected. Downloading latest function..." -ForegroundColor DarkCyan
+                        $content = & $gh.Source api "repos/$repoOwner/$repoName/contents/$remoteScriptPath" --jq .content 2>$null
+                        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($content)) {
+                            $decodedContent = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content -replace '\s', '')))
+                            if ($decodedContent -match "(?m)^function\s+copilot-custom\s*\{") {
+                                Write-Host "Latest function found. Applying updates..." -ForegroundColor Green
+                                New-Item -Path $syncDir -ItemType Directory -Force | Out-Null
+                                Set-Content -Path $downloadPath -Value $decodedContent -Encoding UTF8
+
+                                $statePayload = [ordered]@{
+                                    remoteSha = $remoteSha
+                                    syncedAt = (Get-Date).ToString("o")
+                                    repository = "$repoOwner/$repoName"
+                                    scriptPath = $remoteScriptPath
+                                }
+                                $statePayload | ConvertTo-Json -Depth 4 | Set-Content -Path $statePath -Encoding UTF8
+
+                                . $downloadPath
+                                $resolvedCopilot = Get-Command -Name copilot-custom -CommandType Function -ErrorAction SilentlyContinue
+                                if ($resolvedCopilot -and $resolvedCopilot.Parameters.ContainsKey("SkipRemoteSync")) {
+                                    & copilot-custom -SkipRemoteSync @RemainingArgs
+                                }
+                                else {
+                                    & copilot-custom @RemainingArgs
+                                }
+                                return
+                            }
+                            Write-Host "Remote function format is invalid. Continuing with local copilot-custom." -ForegroundColor Yellow
+                        }
+                        else {
+                            Write-Host "Remote function content unavailable. Continuing with local copilot-custom." -ForegroundColor Yellow
+                        }
                     }
                     else {
-                        Write-Host "Remote function file not found. Continuing with local copilot-custom." -ForegroundColor Yellow
+                        Write-Host "Remote function metadata unavailable. Continuing with local copilot-custom." -ForegroundColor Yellow
                     }
                 }
                 else {
